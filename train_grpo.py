@@ -337,7 +337,7 @@ class FixedEvalCallback(TrainerCallback):
         print(f"\n{'='*60}")
         print(f"Running fixed evaluation at step {step}")
         print(f"{'='*60}")
-        
+
         results = self._evaluate(model, step)
         self._log_to_wandb(results, step)
         self._save_results(results, step)
@@ -373,12 +373,11 @@ class FixedEvalCallback(TrainerCallback):
             generated_ids = outputs[0][inputs["input_ids"].shape[1]:]
             generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
             extracted = extract_answer(generated_text)
-            
+
+            is_correct = False
             if isinstance(extracted, str):
                 is_correct = extracted.strip().lower() == str(sample["answer"]).strip().lower()
-            else:
-                is_correct = False
-            
+
             if is_correct:
                 num_correct += 1
             
