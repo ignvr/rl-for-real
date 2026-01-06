@@ -1,0 +1,109 @@
+# RL for Real - GRPO Training Configuration
+# ==========================================
+#
+# Usage:
+#   python train_grpo.py --config-path config --config-name grpo
+#
+# Override any setting via command line:
+#   python train_grpo.py --config-path config --config-name grpo max_steps=100
+
+# =============================================================================
+# Dataset Configuration
+# =============================================================================
+
+dataset_size: 10000
+developer_prompt: DeepSeekZero  # Uses reasoning-gym's built-in prompt
+developer_role: system
+
+# Fixed evaluation settings
+eval_num_samples: 30
+eval_num_examples_to_print: 2
+fixed_eval_steps: 50  # Run fixed eval every N steps
+
+# Variance logging (helps diagnose exploration)
+log_reward_variance: true
+verbose_variance_logging: false  # Set to true for detailed per-prompt output
+
+# Resume control
+auto_resume: false  # If true, auto-resume from last checkpoint in output_dir
+
+# Training datasets (from reasoning-gym)
+# Each dataset gets procedurally generated problems
+datasets:
+  syllogism:
+    weight: 1.0
+    config:
+      # Easy: 2 premises, simple structure
+#      num_premises: 2
+      allow_all: true
+      allow_no: true
+      allow_some: false
+      allow_some_not: false
+      invalid_ratio: 0.3
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+
+model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+#attn_implementation: flash_attention_2  # or "eager" if flash_attn not available
+
+# =============================================================================
+# Training Hyperparameters
+# =============================================================================
+
+output_dir: outputs/grpo_trained2
+run_name: rl-for-real-run
+
+# Training steps
+max_steps: 150
+num_train_epochs: 1
+
+# Batch sizes
+per_device_train_batch_size: 8
+per_device_eval_batch_size: 16
+gradient_accumulation_steps: 1  # Effective batch = 8 * 4 = 32
+
+# Learning rate
+learning_rate: 1e-6  # 5e-6
+warmup_ratio: 0.1
+lr_scheduler_type: constant_with_warmup
+lr_scheduler_kwargs:
+  num_warmup_steps: 10
+
+# GRPO-specific
+num_generations: 4  # Rollouts per prompt
+max_prompt_length: 512
+max_completion_length: 512
+
+# model behavior
+temperature: 0.6  # 1.0
+
+# =============================================================================
+# Evaluation & Checkpointing
+# =============================================================================
+
+#eval_strategy: steps
+#eval_steps: 100
+#eval_delay: 0
+
+save_strategy: steps
+save_steps: 1000
+save_total_limit: 3
+
+logging_steps: 10
+logging_first_step: true
+
+# =============================================================================
+# Optimization
+# =============================================================================
+
+bf16: true
+gradient_checkpointing: true
+seed: 42
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+report_to: wandb  # or "none" to disable

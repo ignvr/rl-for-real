@@ -1,0 +1,21 @@
+# RL for Real - Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core ML stack
+torch>=2.3.0
+transformers>=4.45.0
+accelerate>=0.30.0
+
+# RL training
+trl>=0.12.0
+
+# Reasoning environments
+reasoning-gym>=0.1.19
+
+# Logging & monitoring
+wandb>=0.16.0
+
+# Utilities
+tqdm>=4.65.0
+pyyaml>=6.0
+
