@@ -7,6 +7,8 @@
 # Override any setting via command line:
 #   python train_grpo.py --config-path config --config-name grpo max_steps=100
 
+run_name: grpo
+
 # =============================================================================
 # Dataset Configuration
 # =============================================================================
