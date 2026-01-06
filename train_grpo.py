@@ -44,6 +44,13 @@ try:
 except ImportError:
     WANDB_AVAILABLE = False
 
+# Try to import peft for LoRA (optional)
+try:
+    from peft import LoraConfig, get_peft_model
+    PEFT_AVAILABLE = True
+except ImportError:
+    PEFT_AVAILABLE = False
+
 
 # =============================================================================
 # Configuration Dataclasses
@@ -327,19 +334,14 @@ class FixedEvalCallback(TrainerCallback):
     
     def _run_eval(self, model, step: int):
         """Run evaluation and log/save results."""
-        self.logger.info(f"\n{'='*60}")
-        self.logger.info(f"Running fixed evaluation at step {step}")
-        self.logger.info(f"{'='*60}")
+        print(f"\n{'='*60}")
+        print(f"Running fixed evaluation at step {step}")
+        print(f"{'='*60}")
         
         results = self._evaluate(model, step)
         self._log_to_wandb(results, step)
         self._save_results(results, step)
-        
-        self.logger.info(f"\n📊 Fixed Eval Results (Step {step}):")
-        self.logger.info(f"   Accuracy: {results['accuracy']:.1f}% ({results['num_correct']}/{results['num_samples']})")
-        self.logger.info(f"   Format Score: {results['format_score']:.1f}%")
-        
-        self._print_examples(results["examples"], step)
+        self._print_results(results, step)
         torch.cuda.empty_cache()
     
     def _evaluate(self, model, step: int) -> dict:
@@ -459,11 +461,16 @@ class FixedEvalCallback(TrainerCallback):
         except Exception as e:
             self.logger.warning(f"Failed to save eval results: {e}")
     
-    def _print_examples(self, examples: list, step: int):
-        """Print example outputs."""
-        print(f"\n📝 Example Outputs (Step {step}):")
-        print("=" * 70)
+    def _print_results(self, results: dict, step: int):
+        """Print evaluation results summary and examples."""
+        print(f"\n{'='*70}")
+        print(f"📊 Evaluation Results (Step {step})")
+        print(f"{'='*70}")
+        print(f"   Accuracy:     {results['accuracy']:.1f}% ({results['num_correct']}/{results['num_samples']})")
+        print(f"   Format Score: {results['format_score']:.1f}%")
+        print(f"{'='*70}")
         
+        examples = results["examples"]
         correct_examples = [e for e in examples if e["correct"]]
         incorrect_examples = [e for e in examples if not e["correct"]]
         
@@ -540,6 +547,42 @@ def prepare_datasets(
 
 
 # =============================================================================
+# Utility Functions
+# =============================================================================
+
+def _log_trainable_params(model):
+    """Print trainable vs total parameters to check if LoRA is active."""
+    total_params = 0
+    trainable_params = 0
+    
+    for param in model.parameters():
+        total_params += param.numel()
+        if param.requires_grad:
+            trainable_params += param.numel()
+    
+    pct = (trainable_params / total_params * 100) if total_params > 0 else 0
+    
+    # Check if PEFT/LoRA is active
+    is_peft = hasattr(model, 'peft_config') or 'PeftModel' in type(model).__name__
+    
+    print("\n" + "=" * 60)
+    print("📊 Model Parameter Summary")
+    print("=" * 60)
+    print(f"   Total parameters:     {total_params:,}")
+    print(f"   Trainable parameters: {trainable_params:,}")
+    print(f"   Trainable %:          {pct:.2f}%")
+    print(f"   PEFT/LoRA active:     {'✓ YES' if is_peft else '✗ NO (full fine-tuning)'}")
+    
+    if is_peft and hasattr(model, 'peft_config'):
+        for adapter_name, config in model.peft_config.items():
+            print(f"   LoRA rank (r):        {getattr(config, 'r', 'N/A')}")
+            print(f"   LoRA alpha:           {getattr(config, 'lora_alpha', 'N/A')}")
+            print(f"   Target modules:       {getattr(config, 'target_modules', 'N/A')}")
+    
+    print("=" * 60 + "\n")
+
+
+# =============================================================================
 # Main Entry Point
 # =============================================================================
 
@@ -581,6 +624,31 @@ def main():
     )
     tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
     logger.info("✓ Model loaded")
+    
+    # Apply PEFT/LoRA if configured
+    if getattr(model_args, 'use_peft', False):
+        if not PEFT_AVAILABLE:
+            raise ImportError("use_peft=True but peft is not installed. Run: pip install peft")
+        
+        lora_r = getattr(model_args, 'lora_r', 16)
+        lora_alpha = getattr(model_args, 'lora_alpha', lora_r)  # default alpha = r
+        lora_dropout = getattr(model_args, 'lora_dropout', 0.05)
+        target_modules = getattr(model_args, 'lora_target_modules', None)
+        
+        # Handle "all-linear" shortcut
+        if target_modules == "all-linear":
+            target_modules = None  # PEFT will auto-detect all linear layers
+            
+        lora_config = LoraConfig(
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            target_modules=target_modules,
+            task_type="CAUSAL_LM",
+        )
+        
+        model = get_peft_model(model, lora_config)
+        logger.info(f"✓ Applied LoRA: r={lora_r}, alpha={lora_alpha}, target_modules={target_modules or 'auto'}")
 
     # Prepare datasets
     logger.info("Preparing datasets...")
@@ -598,6 +666,9 @@ def main():
         log_reward_variance=reasoning_gym_args.log_reward_variance,
         verbose_variance_logging=reasoning_gym_args.verbose_variance_logging,
     )
+    
+    # Log parameter info (check if LoRA is active)
+    _log_trainable_params(trainer.model)
     
     # Add fixed evaluation callback
     fixed_eval_callback = FixedEvalCallback(
@@ -645,14 +716,11 @@ def main():
         except Exception as e:
             logger.warning(f"Failed to initialize wandb: {e}")
     
-    logger.info("\n" + "="*60)
-    logger.info("Running baseline evaluation (Step 0)...")
-    logger.info("="*60)
+    print("\n" + "="*60)
+    print("Running baseline evaluation (Step 0)...")
+    print("="*60)
     baseline_results = fixed_eval_callback._evaluate(model, step=0)
-    logger.info(f"\n📊 Baseline Results:")
-    logger.info(f"   Accuracy: {baseline_results['accuracy']:.1f}% ({baseline_results['num_correct']}/{baseline_results['num_samples']})")
-    logger.info(f"   Format Score: {baseline_results['format_score']:.1f}%")
-    fixed_eval_callback._print_examples(baseline_results["examples"], step=0)
+    fixed_eval_callback._print_results(baseline_results, step=0)
     fixed_eval_callback._log_to_wandb(baseline_results, step=0)
     fixed_eval_callback._save_results(baseline_results, step=0)
 

@@ -7,6 +7,8 @@
 # Override any setting via command line:
 #   python train_grpo.py --config-path config --config-name grpo max_steps=100
 
+run_name: qwen1.5b_syllogism
+
 # =============================================================================
 # Dataset Configuration
 # =============================================================================
@@ -14,18 +16,6 @@
 dataset_size: 10000
 developer_prompt: DeepSeekZero  # Uses reasoning-gym's built-in prompt
 developer_role: system
-
-# Fixed evaluation settings
-eval_num_samples: 30
-eval_num_examples_to_print: 2
-fixed_eval_steps: 50  # Run fixed eval every N steps
-
-# Variance logging (helps diagnose exploration)
-log_reward_variance: true
-verbose_variance_logging: false  # Set to true for detailed per-prompt output
-
-# Resume control
-auto_resume: false  # If true, auto-resume from last checkpoint in output_dir
 
 # Training datasets (from reasoning-gym)
 # Each dataset gets procedurally generated problems
@@ -50,8 +40,8 @@ model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
 # Training Hyperparameters
 # =============================================================================
 
-output_dir: outputs
-run_name: qwen1.5b_syllogism
+# Resume control
+auto_resume: false  # If true, auto-resume from last checkpoint in output_dir
 
 # Training steps
 max_steps: 150
@@ -77,9 +67,27 @@ max_completion_length: 512
 # model behavior
 temperature: 0.6  # 1.0
 
+# LORA
+use_peft: false
+lora_r: 64
+lora_alpha: 128
+lora_dropout: 0.05
+#lora_target_modules: all-linear  # optional: more capacity
+
 # =============================================================================
 # Evaluation & Checkpointing
 # =============================================================================
+
+output_dir: outputs
+
+# Fixed evaluation settings
+eval_num_samples: 30
+eval_num_examples_to_print: 2
+fixed_eval_steps: 50  # Run fixed eval every N steps
+
+# Variance logging (helps diagnose exploration)
+log_reward_variance: true
+verbose_variance_logging: false  # Set to true for detailed per-prompt output
 
 save_strategy: steps
 save_steps: 1000

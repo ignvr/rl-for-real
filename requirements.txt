@@ -8,6 +8,7 @@ accelerate>=0.30.0
 
 # RL training
 trl>=0.12.0
+peft>=0.10.0  # For LoRA/PEFT fine-tuning
 
 # Reasoning environments
 reasoning-gym>=0.1.19
