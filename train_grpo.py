@@ -374,9 +374,9 @@ class FixedEvalCallback(TrainerCallback):
             generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
             extracted = extract_answer(generated_text)
             
-            try:
+            if isinstance(extracted, str):
                 is_correct = extracted.strip().lower() == str(sample["answer"]).strip().lower()
-            except:
+            else:
                 is_correct = False
             
             if is_correct:
