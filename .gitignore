@@ -26,6 +26,7 @@ wandb/
 # IDE
 .vscode/
 .idea/
+.env
 *.swp
 *.swo
 

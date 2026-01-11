@@ -82,6 +82,10 @@ lora_dropout: 0.05
 
 output_dir: outputs
 
+# Eval-only mode (set via command line)
+eval_only: false           # Set to true to skip training and only evaluate
+checkpoint_path: null      # Path to trained model/checkpoint for eval-only mode
+
 # Fixed evaluation settings
 eval_num_samples: 30
 eval_num_examples_to_print: 2

@@ -71,6 +71,9 @@ class DatasetConfig:
     developer_role: str = field(default="system")
     datasets: dict[str, DatasetConfigItem] = field(default=None)
     
+    # Evaluation datasets (optional - if None, uses same config as training)
+    eval_datasets: dict[str, DatasetConfigItem] = field(default=None)
+    
     # Fixed evaluation settings
     eval_num_samples: int = field(default=30)
     eval_num_examples_to_print: int = field(default=3)
@@ -82,8 +85,13 @@ class DatasetConfig:
     
     # Resume control
     auto_resume: bool = field(default=False)  # If True, auto-resume from last checkpoint
+    
+    # Eval-only mode
+    eval_only: bool = field(default=False)  # If True, only run evaluation (no training)
+    checkpoint_path: str = field(default=None)  # Path to checkpoint for eval-only mode
 
     def __post_init__(self):
+        # Convert training datasets
         if self.datasets:
             converted_datasets = {}
             for name, config_item in self.datasets.items():
@@ -92,6 +100,16 @@ class DatasetConfig:
                 else:
                     converted_datasets[name] = config_item
             self.datasets = converted_datasets
+        
+        # Convert eval datasets (if provided)
+        if self.eval_datasets:
+            converted_eval_datasets = {}
+            for name, config_item in self.eval_datasets.items():
+                if isinstance(config_item, dict):
+                    converted_eval_datasets[name] = DatasetConfigItem(**config_item)
+                else:
+                    converted_eval_datasets[name] = config_item
+            self.eval_datasets = converted_eval_datasets
 
 
 # =============================================================================
@@ -302,15 +320,24 @@ class FixedEvalCallback(TrainerCallback):
         self.fixed_samples = []
         for i in range(self.num_samples):
             item = eval_dataset[i]
+            # Get task name from composite dataset metadata (key is "source_dataset")
+            task_name = item["item"].get("metadata", {}).get("source_dataset", "unknown")
             self.fixed_samples.append({
                 "prompt": item["prompt"],
                 "item": item["item"],
                 "question": item["item"]["question"],
                 "answer": item["item"]["answer"],
+                "task": task_name,
             })
+        
+        # Count samples per task for logging
+        task_counts = {}
+        for sample in self.fixed_samples:
+            task_counts[sample["task"]] = task_counts.get(sample["task"], 0) + 1
         
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"FixedEvalCallback: {self.num_samples} samples, eval every {eval_steps} steps")
+        self.logger.info(f"  Tasks: {task_counts}")
     
     def on_log(self, args, state, control, model=None, **kwargs):
         """Run evaluation at fixed intervals."""
@@ -353,7 +380,16 @@ class FixedEvalCallback(TrainerCallback):
         format_scores = []
         examples = []
         
+        # Per-task tracking
+        task_stats = {}  # task_name -> {"correct": int, "total": int, "format_scores": list}
+        
         for sample in self.fixed_samples:
+            task_name = sample["task"]
+            
+            # Initialize task stats if needed
+            if task_name not in task_stats:
+                task_stats[task_name] = {"correct": 0, "total": 0, "format_scores": []}
+            
             inputs = self.tokenizer(
                 sample["prompt"],
                 return_tensors="pt",
@@ -378,11 +414,19 @@ class FixedEvalCallback(TrainerCallback):
             if isinstance(extracted, str):
                 is_correct = extracted.strip().lower() == str(sample["answer"]).strip().lower()
 
+            # PERMISSIVE = True
+            # if PERMISSIVE:
+            #     is_correct |= sample["answer"].strip().lower() in generated_text[-20:].strip().lower()
+
             if is_correct:
                 num_correct += 1
+                task_stats[task_name]["correct"] += 1
+            
+            task_stats[task_name]["total"] += 1
             
             format_score = self._score_format(generated_text)
             format_scores.append(format_score)
+            task_stats[task_name]["format_scores"].append(format_score)
             
             examples.append({
                 "question": sample["question"],
@@ -391,6 +435,7 @@ class FixedEvalCallback(TrainerCallback):
                 "extracted": extracted,
                 "correct": is_correct,
                 "format_score": format_score,
+                "task": task_name,
             })
         
         torch.cuda.empty_cache()
@@ -399,12 +444,25 @@ class FixedEvalCallback(TrainerCallback):
         accuracy = (num_correct / len(self.fixed_samples)) * 100 if self.fixed_samples else 0
         avg_format = (sum(format_scores) / len(format_scores)) * 100 if format_scores else 0
         
+        # Compute per-task metrics
+        per_task_results = {}
+        for task_name, stats in task_stats.items():
+            task_accuracy = (stats["correct"] / stats["total"] * 100) if stats["total"] > 0 else 0
+            task_format = (sum(stats["format_scores"]) / len(stats["format_scores"]) * 100) if stats["format_scores"] else 0
+            per_task_results[task_name] = {
+                "accuracy": task_accuracy,
+                "format_score": task_format,
+                "num_correct": stats["correct"],
+                "num_samples": stats["total"],
+            }
+        
         return {
             "accuracy": accuracy,
             "format_score": avg_format,
             "num_correct": num_correct,
             "num_samples": len(self.fixed_samples),
             "examples": examples,
+            "per_task": per_task_results,
         }
     
     def _score_format(self, text: str) -> float:
@@ -425,12 +483,19 @@ class FixedEvalCallback(TrainerCallback):
         if not WANDB_AVAILABLE or wandb.run is None:
             return
         try:
-            wandb.log({
+            log_dict = {
                 "eval/accuracy": results["accuracy"],
                 "eval/format_score": results["format_score"],
                 "eval/num_correct": results["num_correct"],
                 "eval/step": step,
-            }, commit=False)
+            }
+            
+            # Add per-task metrics
+            for task_name, task_results in results.get("per_task", {}).items():
+                log_dict[f"eval/{task_name}/accuracy"] = task_results["accuracy"]
+                log_dict[f"eval/{task_name}/format_score"] = task_results["format_score"]
+            
+            wandb.log(log_dict, commit=False)
             self.logger.info(f"📊 Logged to wandb: accuracy={results['accuracy']:.1f}%")
         except Exception as e:
             self.logger.warning(f"Failed to log to wandb: {e}")
@@ -449,6 +514,7 @@ class FixedEvalCallback(TrainerCallback):
             "format_score": results["format_score"],
             "num_correct": results["num_correct"],
             "num_samples": results["num_samples"],
+            "per_task": results.get("per_task", {}),
             "examples": results["examples"],
         }
         
@@ -465,8 +531,21 @@ class FixedEvalCallback(TrainerCallback):
         print(f"\n{'='*70}")
         print(f"📊 Evaluation Results (Step {step})")
         print(f"{'='*70}")
-        print(f"   Accuracy:     {results['accuracy']:.1f}% ({results['num_correct']}/{results['num_samples']})")
-        print(f"   Format Score: {results['format_score']:.1f}%")
+        print(f"   Overall Accuracy:     {results['accuracy']:.1f}% ({results['num_correct']}/{results['num_samples']})")
+        print(f"   Overall Format Score: {results['format_score']:.1f}%")
+        
+        # Print per-task breakdown
+        per_task = results.get("per_task", {})
+        if per_task:
+            print(f"\n   {'─'*50}")
+            print(f"   Per-Task Breakdown:")
+            print(f"   {'─'*50}")
+            for task_name in sorted(per_task.keys()):
+                task_results = per_task[task_name]
+                print(f"   {task_name:25s} {task_results['accuracy']:5.1f}% "
+                      f"({task_results['num_correct']}/{task_results['num_samples']}) "
+                      f"| format: {task_results['format_score']:.0f}%")
+        
         print(f"{'='*70}")
         
         examples = results["examples"]
@@ -482,8 +561,9 @@ class FixedEvalCallback(TrainerCallback):
         
         for i, ex in enumerate(to_print[:self.num_examples_to_print]):
             status = "✓ CORRECT" if ex["correct"] else "✗ WRONG"
+            task_name = ex.get("task", "unknown")
             print(f"\n{'─'*70}")
-            print(f"Example {i+1} [{status}] | Format: {ex['format_score']*100:.0f}%")
+            print(f"Example {i+1} [{status}] | Task: {task_name} | Format: {ex['format_score']*100:.0f}%")
             print(f"{'─'*70}")
             
             q = ex['question']
@@ -513,7 +593,8 @@ def prepare_datasets(
     """Prepare training and evaluation datasets from config."""
     developer_prompt = SYSTEM_PROMPTS[config.developer_prompt]
 
-    dataset_specs = [
+    # Training dataset specs
+    train_dataset_specs = [
         DatasetSpec(
             name=name,
             weight=ds_config.weight,
@@ -522,11 +603,24 @@ def prepare_datasets(
         for name, ds_config in config.datasets.items()
     ]
     
+    # Eval dataset specs: use eval_datasets if provided, otherwise use same as training
+    if config.eval_datasets:
+        eval_dataset_specs = [
+            DatasetSpec(
+                name=name,
+                weight=ds_config.weight,
+                config=ds_config.config,
+            )
+            for name, ds_config in config.eval_datasets.items()
+        ]
+    else:
+        eval_dataset_specs = train_dataset_specs
+    
     train_data = reasoning_gym.create_dataset(
-        "composite", seed=1, size=config.dataset_size, datasets=dataset_specs
+        "composite", seed=1, size=config.dataset_size, datasets=train_dataset_specs
     )
     eval_data = reasoning_gym.create_dataset(
-        "composite", seed=2, size=config.dataset_size, datasets=dataset_specs
+        "composite", seed=2, size=config.eval_num_samples, datasets=eval_dataset_specs
     )
     
     train_dataset = ReasoningGymDataset(
@@ -543,6 +637,90 @@ def prepare_datasets(
     )
     
     return train_dataset, eval_dataset
+
+
+# =============================================================================
+# Eval-Only Mode
+# =============================================================================
+
+def _run_eval_only(reasoning_gym_args, training_args, model_args, logger):
+    """Run evaluation only (no training)."""
+    print("\n" + "=" * 70)
+    print("🔍 EVAL-ONLY MODE")
+    print("=" * 70)
+    
+    # Determine model path: use checkpoint_path if provided, else base model
+    model_path = reasoning_gym_args.checkpoint_path or model_args.model_name_or_path
+    logger.info(f"Loading model from: {model_path}")
+    
+    # Load model and tokenizer
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+    )
+    
+    # Try to load tokenizer from checkpoint, fall back to base model
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+    except:
+        logger.info(f"Tokenizer not found at {model_path}, using base model tokenizer")
+        tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
+    
+    logger.info("✓ Model loaded")
+    
+    # Log model info
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"\n   Model: {model_path}")
+    print(f"   Parameters: {total_params:,}")
+    
+    # Prepare eval dataset only
+    logger.info("Preparing evaluation dataset...")
+    _, eval_dataset = prepare_datasets(reasoning_gym_args, tokenizer)
+    logger.info(f"✓ Eval dataset: {len(eval_dataset)} samples available, using {reasoning_gym_args.eval_num_samples}")
+    
+    # Create eval callback (reuse existing infrastructure)
+    fixed_eval_callback = FixedEvalCallback(
+        eval_dataset=eval_dataset,
+        tokenizer=tokenizer,
+        num_samples=reasoning_gym_args.eval_num_samples,
+        num_examples_to_print=reasoning_gym_args.eval_num_examples_to_print,
+        output_dir=training_args.output_dir,
+        eval_steps=reasoning_gym_args.fixed_eval_steps,
+    )
+    
+    # Initialize wandb if configured
+    if WANDB_AVAILABLE and "wandb" in (training_args.report_to or []):
+        try:
+            wandb.init(
+                project=os.environ.get("WANDB_PROJECT", "rl-for-real"),
+                name=f"{training_args.run_name}_eval" if training_args.run_name else "eval",
+                config={
+                    "mode": "eval_only",
+                    "model": model_path,
+                    "eval_num_samples": reasoning_gym_args.eval_num_samples,
+                },
+            )
+            logger.info("✓ Initialized wandb")
+        except Exception as e:
+            logger.warning(f"Failed to initialize wandb: {e}")
+    
+    # Run evaluation
+    print("\n" + "=" * 70)
+    print("Running evaluation...")
+    print("=" * 70)
+    
+    results = fixed_eval_callback._evaluate(model, step=0)
+    fixed_eval_callback._print_results(results, step=0)
+    fixed_eval_callback._log_to_wandb(results, step=0)
+    fixed_eval_callback._save_results(results, step=0)
+    
+    # Clean up
+    print("\n✓ Evaluation complete!")
+    if WANDB_AVAILABLE and wandb.run is not None:
+        wandb.finish()
+    del model
+    torch.cuda.empty_cache()
 
 
 # =============================================================================
@@ -613,6 +791,17 @@ def main():
     logger.info(f"Training: {training_args}")
     logger.info(f"Output directory: {training_args.output_dir}")
 
+    # =========================================================================
+    # EVAL-ONLY MODE
+    # =========================================================================
+    if reasoning_gym_args.eval_only:
+        _run_eval_only(reasoning_gym_args, training_args, model_args, logger)
+        return
+
+    # =========================================================================
+    # TRAINING MODE
+    # =========================================================================
+    
     # Load model
     logger.info(f"Loading model: {model_args.model_name_or_path}")
     model = AutoModelForCausalLM.from_pretrained(
