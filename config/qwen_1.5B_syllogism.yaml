@@ -48,7 +48,7 @@ model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
 auto_resume: false  # If true, auto-resume from last checkpoint in output_dir
 
 # Training steps
-max_steps: 150
+max_steps: 200
 num_train_epochs: 1
 
 # Batch sizes
