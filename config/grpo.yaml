@@ -13,23 +13,37 @@ run_name: grpo
 # Dataset Configuration
 # =============================================================================
 
-dataset_size: 10000
+dataset_size: 20000
 developer_prompt: DeepSeekZero  # Uses reasoning-gym's built-in prompt
 developer_role: system
 
 # Training datasets (from reasoning-gym)
 # Each dataset gets procedurally generated problems
 datasets:
-  syllogism:
+  number_filtering:
     weight: 1.0
-    config:
-      # Easy: 2 premises, simple structure
-#      num_premises: 2
-      allow_all: true
-      allow_no: true
-      allow_some: false
-      allow_some_not: false
-      invalid_ratio: 0.3
+  letter_counting:
+    weight: 1.0
+  string_insertion:
+    weight: 1.0
+
+# Evaluation datasets (optional)
+# If not specified (null/omitted), uses the same config as training datasets.
+eval_datasets:
+  number_filtering:
+    weight: 1.0
+  letter_counting:
+    weight: 1.0
+  string_insertion:
+    weight: 1.0
+  rotten_oranges:  # in-domain generalization
+    weight: 1.0
+  base_conversion:  # harder in-domain generalization
+    weight: 1.0
+  knight_swap:  # out-of-domain generalization
+    weight: 1.0
+  puzzle24:  # harder out-of-domain generalization
+    weight: 1.0
 
 # =============================================================================
 # Model Configuration
@@ -46,7 +60,7 @@ model_name_or_path: Qwen/Qwen2.5-3B-Instruct
 auto_resume: false  # If true, auto-resume from last checkpoint in output_dir
 
 # Training steps
-max_steps: 150
+max_steps: 1000
 num_train_epochs: 1
 
 # Batch sizes
@@ -87,9 +101,9 @@ eval_only: false           # Set to true to skip training and only evaluate
 checkpoint_path: null      # Path to trained model/checkpoint for eval-only mode
 
 # Fixed evaluation settings
-eval_num_samples: 30
-eval_num_examples_to_print: 2
-fixed_eval_steps: 50  # Run fixed eval every N steps
+eval_num_samples: 140
+eval_num_examples_to_print: 5
+fixed_eval_steps: 100  # Run fixed eval every N steps
 
 # Variance logging (helps diagnose exploration)
 log_reward_variance: true

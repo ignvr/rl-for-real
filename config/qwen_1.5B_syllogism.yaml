@@ -52,8 +52,8 @@ max_steps: 200
 num_train_epochs: 1
 
 # Batch sizes
-per_device_train_batch_size: 8
 per_device_eval_batch_size: 16
+per_device_train_batch_size: 8
 gradient_accumulation_steps: 1  # Effective batch = 8 * 4 = 32
 
 # Learning rate
@@ -95,7 +95,7 @@ fixed_eval_steps: 50  # Run fixed eval every N steps
 
 # Variance logging (helps diagnose exploration)
 log_reward_variance: true
-verbose_variance_logging: false  # Set to true for detailed per-prompt output
+verbose_variance_logging: true  # Set to true for detailed per-prompt output
 
 save_strategy: steps
 save_steps: 1000
