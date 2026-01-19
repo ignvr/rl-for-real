@@ -1,7 +1,10 @@
 # RL for Real - Dependencies
 # Install with: pip install -r requirements.txt
+#
+# NOTE: Install PyTorch with CUDA support FIRST (see README.md):
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
 
-# Core ML stack
+# Core ML stack (torch should already be installed with CUDA)
 torch>=2.3.0
 transformers>=4.45.0
 accelerate>=0.30.0
