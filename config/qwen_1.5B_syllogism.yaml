@@ -69,7 +69,8 @@ max_prompt_length: 512
 max_completion_length: 512
 
 # model behavior
-temperature: 0.6  # 1.0
+temperature: 0.6  # training temperature
+eval_temperature: 0.6  # eval temperature (0 = greedy/deterministic)
 
 # LORA
 use_peft: false

@@ -37,6 +37,9 @@ class DatasetConfig:
     # Eval-only mode
     eval_only: bool = field(default=False)  # If True, only run evaluation (no training)
     checkpoint_path: str = field(default=None)  # Path to checkpoint for eval-only mode
+    
+    # Eval generation settings
+    eval_temperature: float = field(default=0.6)  # Temperature for eval generation (0 = greedy)
 
     def __post_init__(self):
         # Convert training datasets

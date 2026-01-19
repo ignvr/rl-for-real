@@ -39,6 +39,7 @@ class FixedEvalCallback(TrainerCallback):
         max_new_tokens: int = 512,
         output_dir: str = None,
         eval_steps: int = 50,
+        temperature: float = 0.6,
     ):
         self.tokenizer = tokenizer
         self.num_samples = min(num_samples, len(eval_dataset))
@@ -47,6 +48,8 @@ class FixedEvalCallback(TrainerCallback):
         self.output_dir = output_dir
         self.eval_steps = eval_steps
         self.last_eval_step = -1
+        self.temperature = temperature
+        self.do_sample = temperature > 0
         
         # Store the underlying procedural dataset for proper scoring
         self.procedural_dataset = eval_dataset.data
@@ -133,13 +136,14 @@ class FixedEvalCallback(TrainerCallback):
             ).to(device)
             
             with torch.no_grad():
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=self.max_new_tokens,
-                    temperature=0.7,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
-                )
+                generate_kwargs = {
+                    "max_new_tokens": self.max_new_tokens,
+                    "do_sample": self.do_sample,
+                    "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+                }
+                if self.do_sample:
+                    generate_kwargs["temperature"] = self.temperature
+                outputs = model.generate(**inputs, **generate_kwargs)
             
             generated_ids = outputs[0][inputs["input_ids"].shape[1]:]
             generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
@@ -218,8 +222,8 @@ class FixedEvalCallback(TrainerCallback):
         try:
             log_dict = {
                 "eval/accuracy": results["accuracy"],
-                "eval/format_score": results["format_score"],
-                "eval/num_correct": results["num_correct"],
+                # "eval/format_score": results["format_score"],
+                # "eval/num_correct": results["num_correct"],
                 "eval/step": step,
             }
             
