@@ -37,7 +37,8 @@ eval_datasets: null
 # Model Configuration
 # =============================================================================
 
-model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+#model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+model_name_or_path: unsloth/Llama-3.2-1B-Instruct
 #attn_implementation: flash_attention_2  # or "eager" if flash_attn not available
 
 # =============================================================================
@@ -91,12 +92,12 @@ checkpoint_path: null      # Path to trained model/checkpoint for eval-only mode
 
 # Fixed evaluation settings
 eval_num_samples: 30
-eval_num_examples_to_print: 2
+eval_num_examples_to_print: 5
 fixed_eval_steps: 50  # Run fixed eval every N steps
 
 # Variance logging (helps diagnose exploration)
 log_reward_variance: true
-verbose_variance_logging: true  # Set to true for detailed per-prompt output
+verbose_variance_logging: false  # Set to true for detailed per-prompt output
 
 save_strategy: steps
 save_steps: 1000
