@@ -222,15 +222,15 @@ class FixedEvalCallback(TrainerCallback):
         try:
             log_dict = {
                 "eval/accuracy": results["accuracy"],
-                # "eval/format_score": results["format_score"],
-                # "eval/num_correct": results["num_correct"],
+                "eval/format_score": results["format_score"],
+                "eval/num_correct": results["num_correct"],
                 "eval/step": step,
             }
             
             # Add per-task metrics
             for task_name, task_results in results.get("per_task", {}).items():
                 log_dict[f"eval/{task_name}/accuracy"] = task_results["accuracy"]
-                log_dict[f"eval/{task_name}/format_score"] = task_results["format_score"]
+                # log_dict[f"eval/{task_name}/format_score"] = task_results["format_score"]
             
             wandb.log(log_dict, commit=False)
             self.logger.info(f"📊 Logged to wandb: accuracy={results['accuracy']:.1f}%")
