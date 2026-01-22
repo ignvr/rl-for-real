@@ -286,17 +286,8 @@ class FixedEvalCallback(TrainerCallback):
         print(f"{'='*70}")
         
         examples = results["examples"]
-        correct_examples = [e for e in examples if e["correct"]]
-        incorrect_examples = [e for e in examples if not e["correct"]]
-        
-        to_print = []
-        if correct_examples:
-            to_print.append(correct_examples[0])
-        to_print.extend(incorrect_examples[:self.num_examples_to_print - len(to_print)])
-        if len(to_print) < self.num_examples_to_print:
-            to_print.extend(correct_examples[1:self.num_examples_to_print - len(to_print) + 1])
-        
-        for i, ex in enumerate(to_print[:self.num_examples_to_print]):
+        to_print = examples[:self.num_examples_to_print]
+        for i, ex in enumerate(to_print):
             status = "✓ CORRECT" if ex["correct"] else "✗ WRONG"
             task_name = ex.get("task", "unknown")
             accuracy_score = ex.get("accuracy_score", 0.0)
