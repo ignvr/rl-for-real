@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 
 
 @dataclass
@@ -32,10 +32,10 @@ class DatasetConfig:
     dataset_size: int = field(default=10000)
     developer_prompt: str = field(default="DeepSeekZero")
     developer_role: str = field(default="system")
-    datasets: Any = field(default=None)  # dict or JSON string (for CLI/sweep support)
+    datasets: Optional[str] = field(default=None)  # JSON string, e.g. '{"task": {}}'
     
     # Evaluation datasets (optional - if None, uses same config as training)
-    eval_datasets: Any = field(default=None)  # dict or JSON string (for CLI/sweep support)
+    eval_datasets: Optional[str] = field(default=None)  # JSON string, e.g. '{"task": {}}'
     
     # Fixed evaluation settings
     eval_num_samples: int = field(default=30)
