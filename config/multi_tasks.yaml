@@ -1,0 +1,118 @@
+# RL for Real - GRPO Training Configuration
+# ==========================================
+#
+# Usage:
+#   python train_grpo.py --config-path config --config-name grpo
+#
+# Override any setting via command line:
+#   python train_grpo.py --config-path config --config-name grpo max_steps=100
+
+run_name: grpo
+
+# =============================================================================
+# Dataset Configuration
+# =============================================================================
+
+dataset_size: 20000
+developer_prompt: DeepSeekZero  # Uses reasoning-gym's built-in prompt
+developer_role: system
+
+# Training datasets (from reasoning-gym)
+# Each dataset gets procedurally generated problems
+datasets: {"number_filtering": {}, "string_insertion": {}, "family_relationships": {}, "maze": {}}
+
+# Evaluation datasets (optional)
+# If not specified (null/omitted), uses the same config as training datasets.
+eval_datasets: {"number_filtering": {}, "string_insertion": {}, "family_relationships": {}, "maze": {}, "base_conversion": {}}
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+
+model_name_or_path: Qwen/Qwen2.5-3B-Instruct
+#model_name_or_path: unsloth/Llama-3.2-1B-Instruct
+#attn_implementation: flash_attention_2  # or "eager" if flash_attn not available
+
+# =============================================================================
+# Training Hyperparameters
+# =============================================================================
+
+# Resume control
+auto_resume: false  # If true, auto-resume from last checkpoint in output_dir
+
+# Training steps
+max_steps: 400
+batch_counts_as_step: false  # If true: max_steps/eval_steps count batches, wandb x-axis is batch count
+num_train_epochs: 1
+
+# Batch sizes
+per_device_eval_batch_size: 16
+per_device_train_batch_size: 16
+gradient_accumulation_steps: 4
+
+# Learning rate
+learning_rate: 1e-5
+warmup_ratio: 0.1
+lr_scheduler_type: constant_with_warmup
+lr_scheduler_kwargs:
+  num_warmup_steps: 10
+
+# GRPO-specific
+num_generations: 4  # Rollouts per prompt
+#max_prompt_length: 512
+max_completion_length: 512
+
+# model behavior
+temperature: 0.6  # training temperature
+eval_temperature: 0.2  # eval temperature (0 = greedy/deterministic)
+
+# LORA
+use_peft: false
+lora_r: 256
+lora_alpha: 256
+lora_dropout: 0.05
+#lora_target_modules: all-linear  # optional: more capacity
+
+# =============================================================================
+# Evaluation & Checkpointing
+# =============================================================================
+
+output_dir: outputs
+
+# Eval-only mode (set via command line)
+eval_only: false           # Set to true to skip training and only evaluate
+checkpoint_path: null      # Path to trained model/checkpoint for eval-only mode
+
+# Fixed evaluation settings
+eval_num_samples: 160
+eval_num_examples_to_print: 5
+fixed_eval_steps: 100  # Run fixed eval every N steps
+
+# Variance logging (helps diagnose exploration)
+log_reward_variance: true
+verbose_variance_logging: false  # Set to true for detailed per-prompt output
+
+#eval_strategy: steps
+#eval_steps: 100
+#eval_delay: 0
+
+save_strategy: steps
+save_steps: 1000
+save_total_limit: 3
+
+logging_steps: 10
+logging_first_step: true
+
+# =============================================================================
+# Optimization
+# =============================================================================
+
+bf16: true
+gradient_checkpointing: true
+seed: 42
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+report_to: wandb  # or "none" to disable
