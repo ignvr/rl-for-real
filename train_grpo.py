@@ -19,7 +19,7 @@ Features:
 import logging
 import os
 import sys
-
+import math
 import torch
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
@@ -146,7 +146,16 @@ def _init_wandb(reasoning_gym_args, training_args, model_args, logger, mode="tra
                 name=name,
                 config=full_config,
             )
-            logger.info("✓ Initialized wandb with full config")
+            
+            # Configure x-axis for charts based on batch_counts_as_step mode
+            if reasoning_gym_args.batch_counts_as_step:
+                # Use batch count as x-axis for all train/* metrics
+                wandb.define_metric("train/batch")
+                wandb.define_metric("train/*", step_metric="train/batch")
+                wandb.define_metric("eval/*", step_metric="train/batch")
+                logger.info("✓ Initialized wandb with batch x-axis (batch_counts_as_step=True)")
+            else:
+                logger.info("✓ Initialized wandb with step x-axis")
     except Exception as e:
         logger.warning(f"Failed to initialize wandb: {e}")
 
@@ -264,6 +273,7 @@ def _run_training(reasoning_gym_args, training_args, model_args, logger):
         eval_dataset=eval_dataset,
         log_reward_variance=reasoning_gym_args.log_reward_variance,
         verbose_variance_logging=reasoning_gym_args.verbose_variance_logging,
+        batch_counts_as_step=reasoning_gym_args.batch_counts_as_step,
     )
     
     # Log parameter info
@@ -327,8 +337,21 @@ def main():
     reasoning_gym_args, training_args, model_args = parser.parse_args_and_config()
     set_seed(training_args.seed)
 
+    # Adjust max_steps and fixed_eval_steps if batch_counts_as_step mode
+    # Each step = gradient_accumulation_steps batches, so divide to keep same total batches
+    if reasoning_gym_args.batch_counts_as_step:
+        original_max_steps = training_args.max_steps
+        original_eval_steps = reasoning_gym_args.fixed_eval_steps
+        training_args.max_steps = int(math.ceil(original_max_steps / training_args.gradient_accumulation_steps))
+        reasoning_gym_args.fixed_eval_steps = int(math.ceil(original_eval_steps / training_args.gradient_accumulation_steps))
+
     # Set up logging
     logger = _setup_logging(training_args)
+    
+    # Log adjustment info
+    if reasoning_gym_args.batch_counts_as_step:
+        logger.info(f"batch_counts_as_step: max_steps {original_max_steps} / {training_args.gradient_accumulation_steps} = {training_args.max_steps}")
+        logger.info(f"batch_counts_as_step: fixed_eval_steps {original_eval_steps} / {training_args.gradient_accumulation_steps} = {reasoning_gym_args.fixed_eval_steps}")
     
     # Create output directory
     if training_args.run_name:

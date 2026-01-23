@@ -36,6 +36,7 @@ class CustomGRPOTrainer(GRPOTrainer):
         eval_dataset: ReasoningGymDataset,
         log_reward_variance: bool = True,
         verbose_variance_logging: bool = False,
+        batch_counts_as_step: bool = False,
     ):
         super().__init__(
             model=model,
@@ -50,7 +51,20 @@ class CustomGRPOTrainer(GRPOTrainer):
         )
         self.log_reward_variance = log_reward_variance
         self.verbose_variance_logging = verbose_variance_logging
+        self.batch_counts_as_step = batch_counts_as_step
         self._step_count = 0
+    
+    def log(self, logs: dict, start_time: float = None) -> None:
+        """Override log to add batch counter for wandb x-axis support."""
+        # Add batch counter if batch_counts_as_step mode
+        if self.batch_counts_as_step and self.state is not None:
+            batch_count = self.state.global_step * self.args.gradient_accumulation_steps
+            logs["train/batch"] = batch_count
+            # Explicitly log to wandb since the callback may not pass through custom metrics
+            if WANDB_AVAILABLE and wandb.run is not None:
+                wandb.log({"train/batch": batch_count}, commit=False)
+        
+        super().log(logs, start_time)
 
     def _accuracy_reward(self, completions: list[str], **kwargs) -> list[float]:
         """Compute accuracy reward using reasoning-gym's scoring function."""

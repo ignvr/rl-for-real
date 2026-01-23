@@ -22,6 +22,8 @@ checkpoints/
 # Logs
 *.log
 wandb/
+sweep_history/
+hf_cache_temp/
 
 # IDE
 .vscode/

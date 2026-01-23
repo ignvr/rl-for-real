@@ -55,6 +55,12 @@ class DatasetConfig:
     
     # Eval generation settings
     eval_temperature: float = field(default=0.6)  # Temperature for eval generation (0 = greedy)
+    
+    # Step counting mode
+    # If True: interpret max_steps/fixed_eval_steps as batch counts (divided by gradient_accumulation_steps)
+    #          and use batch as wandb x-axis for fair comparison across different accumulation settings
+    # If False: normal step-based counting
+    batch_counts_as_step: bool = field(default=False)
 
     def __post_init__(self):
         # Parse datasets from JSON string if needed (for CLI/sweep support)
