@@ -65,6 +65,8 @@ Observe the training and evaluation curves at wandb, as well as examples for que
 
 ### Train Qwen for better reasoning
 
+#### Intro
+
 You may run
 ```bash
 python train_grpo.py --config config/multi_tasks.yaml
@@ -73,7 +75,11 @@ to train Qwen2.5-3B-Instruct to solve several reasoning tasks (`number_filtering
 
 Using `config/multi_tasks.yaml` as provided should result in ~40min training.
 
-**Try to improve Qwen's training and achieve the best evaluation scores you can.**
+#### Task
+
+Try to improve Qwen's training and achieve the best evaluation scores you can.
+
+#### Potential directions
 
 You may take whichever approach you like to improve the results.
 Below are several ideas.
