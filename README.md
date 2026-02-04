@@ -88,6 +88,7 @@ Below are several ideas.
 3. The function `_format_reward()` in `trainer.py` defines the reward for answer format correctness, and is summed with `_accuracy_reward()`. Currently, each of the two functions returns a reward component of the same scale, in `[0,1]`. Is this the right balance? Consider the logic and scale of `_format_reward()` in light of the training curves.
 4. Extended coding:
     * Try using TRL's KL-regularization. Notice that it restricts the model updates with respect to the *original* model weights ("global" regularization). Modify the regularization to be "local": every update, restrict the new model with respect to the *current* model, not the original one.
+    * Implement an actor-critic training framework.
     * TODO clipping idea - something with `get_off_policy_mask()?` [I can't find it](https://github.com/huggingface/trl/blob/main/trl/trainer/grpo_trainer.py#L1929).
 
 ## GPU Requirements

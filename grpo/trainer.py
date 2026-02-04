@@ -56,6 +56,16 @@ class CustomGRPOTrainer(GRPOTrainer):
     
     def log(self, logs: dict, start_time: float = None) -> None:
         """Override log to manually log to wandb with correct x-axis."""
+        # First, let parent class merge _metrics into logs
+        # (GRPOTrainer.log merges self._metrics[mode] into logs before calling super().log)
+        mode = "train" if self.model.training else "eval"
+        if hasattr(self, '_metrics') and mode in self._metrics:
+            metrics = {key: sum(val) / len(val) for key, val in self._metrics[mode].items() if val}
+            if mode == "eval":
+                metrics = {f"eval_{key}": val for key, val in metrics.items()}
+            logs = {**logs, **metrics}
+        
+        # Now log to wandb with our custom step
         if self.state is not None and WANDB_AVAILABLE and wandb.run is not None:
             # Determine which step metric to use
             if self.batch_counts_as_step:
@@ -68,6 +78,13 @@ class CustomGRPOTrainer(GRPOTrainer):
                 
                 # Add all train metrics
                 for key, value in logs.items():
+                    # Convert string numbers to float (HuggingFace logs some metrics as strings)
+                    if isinstance(value, str):
+                        try:
+                            value = float(value)
+                        except (ValueError, TypeError):
+                            continue  # Skip non-numeric strings
+                    
                     if isinstance(value, (int, float)):
                         # Prefix with train/ if not already prefixed
                         if not key.startswith("train/") and not key.startswith("eval/"):
@@ -82,8 +99,13 @@ class CustomGRPOTrainer(GRPOTrainer):
                 # Log error but don't crash training
                 print(f"Warning: Failed to log to wandb at step {step_value}: {e}")
         
-        # Still call parent to keep HuggingFace's internal logging
-        super().log(logs, start_time)
+        # Clear metrics before calling parent (to avoid double logging in parent's log method)
+        if hasattr(self, '_metrics') and mode in self._metrics:
+            self._metrics[mode].clear()
+        
+        # Call grandparent's log (skip GRPOTrainer.log since we already handled metrics)
+        from transformers import Trainer
+        Trainer.log(self, logs, start_time)
 
     def _accuracy_reward(self, completions: list[str], **kwargs) -> list[float]:
         """Compute accuracy reward using reasoning-gym's scoring function."""
