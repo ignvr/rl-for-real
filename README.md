@@ -95,8 +95,8 @@ Below are several ideas.
 
 | Model | VRAM Needed |
 |-------|-------------|
-| Qwen2.5-1.5B-Instruct | ~16GB |
-| Qwen2.5-3B-Instruct | ~24GB |
+| Qwen2.5-1.5B-Instruct | 16GB |
+| Qwen2.5-3B-Instruct | Minimal: 24GB; Recommended: 40GB |
 
 Reduce batch size (`per_device_train_batch_size`), enable `lora` or enable gradient checkpointing if running low on memory.
 
