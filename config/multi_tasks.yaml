@@ -2,10 +2,10 @@
 # ==========================================
 #
 # Usage:
-#   python train_grpo.py --config-path config --config-name grpo
+#   python train_grpo.py --config config/multi_tasks.yaml
 #
 # Override any setting via command line:
-#   python train_grpo.py --config-path config --config-name grpo max_steps=100
+#   python train_grpo.py --config config/multi_tasks.yaml max_steps=100
 
 run_name: grpo
 
@@ -31,7 +31,6 @@ eval_datasets: {"number_filtering": {}, "string_insertion": {}, "family_relation
 
 model_name_or_path: Qwen/Qwen2.5-3B-Instruct
 #model_name_or_path: unsloth/Llama-3.2-1B-Instruct
-#attn_implementation: flash_attention_2  # or "eager" if flash_attn not available
 
 # =============================================================================
 # Training Hyperparameters
@@ -41,17 +40,17 @@ model_name_or_path: Qwen/Qwen2.5-3B-Instruct
 auto_resume: false  # If true, auto-resume from last checkpoint in output_dir
 
 # Training steps
-max_steps: 400
-batch_counts_as_step: false  # If true: max_steps/eval_steps count batches, wandb x-axis is batch count
-num_train_epochs: 1
+max_steps: 200
+batch_counts_as_step: false  # Note: this is used to compare runs with different batch-sizes - presenting results vs. train data (instead of vs. model updates).
+num_train_epochs: 1  # Note: in our setting, this is practically irrelevant, since max_steps does not allow reaching a second epoch anyway.
 
 # Batch sizes
 per_device_eval_batch_size: 16
-per_device_train_batch_size: 16
-gradient_accumulation_steps: 4
+per_device_train_batch_size: 8
+gradient_accumulation_steps: 2
 
 # Learning rate
-learning_rate: 1e-5
+learning_rate: 3e-6
 warmup_ratio: 0.1
 lr_scheduler_type: constant_with_warmup
 lr_scheduler_kwargs:
@@ -59,10 +58,9 @@ lr_scheduler_kwargs:
 
 # GRPO-specific
 num_generations: 4  # Rollouts per prompt
-#max_prompt_length: 512
-max_completion_length: 512
+max_completion_length: 384
 
-# model behavior
+# Model behavior
 temperature: 0.6  # training temperature
 eval_temperature: 0.2  # eval temperature (0 = greedy/deterministic)
 
@@ -84,7 +82,7 @@ eval_only: false           # Set to true to skip training and only evaluate
 checkpoint_path: null      # Path to trained model/checkpoint for eval-only mode
 
 # Fixed evaluation settings
-eval_num_samples: 160
+eval_num_samples: 120
 eval_num_examples_to_print: 5
 fixed_eval_steps: 100  # Run fixed eval every N steps
 

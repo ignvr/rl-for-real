@@ -133,6 +133,9 @@ def _init_wandb(reasoning_gym_args, training_args, model_args, logger, mode="tra
         return
     
     try:
+        # Disable HuggingFace's automatic wandb integration - we'll log manually
+        training_args.report_to = []
+        
         if wandb.run is None:
             full_config = grpo.build_wandb_config(reasoning_gym_args, training_args, model_args)
             full_config["mode"] = mode
@@ -147,15 +150,8 @@ def _init_wandb(reasoning_gym_args, training_args, model_args, logger, mode="tra
                 config=full_config,
             )
             
-            # Configure x-axis for charts based on batch_counts_as_step mode
-            if reasoning_gym_args.batch_counts_as_step:
-                # Use batch count as x-axis for all train/* metrics
-                wandb.define_metric("train/batch")
-                wandb.define_metric("train/*", step_metric="train/batch")
-                wandb.define_metric("eval/*", step_metric="train/batch")
-                logger.info("✓ Initialized wandb with batch x-axis (batch_counts_as_step=True)")
-            else:
-                logger.info("✓ Initialized wandb with step x-axis")
+            logger.info(f"✓ Initialized wandb manually (disabled HuggingFace's automatic logging)")
+            logger.info(f"  Using step parameter in wandb.log() for explicit x-axis control")
     except Exception as e:
         logger.warning(f"Failed to initialize wandb: {e}")
 
@@ -264,6 +260,9 @@ def _run_training(reasoning_gym_args, training_args, model_args, logger):
     train_dataset, eval_dataset = grpo.prepare_datasets(reasoning_gym_args, tokenizer)
     logger.info(f"✓ Train: {len(train_dataset)} samples, Eval: {len(eval_dataset)} samples")
 
+    # Initialize wandb BEFORE creating trainer so we can set define_metric before HuggingFace's WandbCallback
+    _init_wandb(reasoning_gym_args, training_args, model_args, logger, mode="training")
+
     # Initialize trainer
     trainer = grpo.CustomGRPOTrainer(
         model=model,
@@ -294,9 +293,6 @@ def _run_training(reasoning_gym_args, training_args, model_args, logger):
 
     # Find checkpoint for resuming
     ckpt = _find_checkpoint(reasoning_gym_args, training_args, logger)
-
-    # Initialize wandb
-    _init_wandb(reasoning_gym_args, training_args, model_args, logger, mode="training")
     
     # Run baseline evaluation (Step 0)
     print("\n" + "="*60)

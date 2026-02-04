@@ -220,20 +220,20 @@ class FixedEvalCallback(TrainerCallback):
         if not WANDB_AVAILABLE or wandb.run is None:
             return
         try:
+            # Build log dict with eval metrics
             log_dict = {
                 "eval/accuracy": results["accuracy"],
                 "eval/format_score": results["format_score"],
                 "eval/num_correct": results["num_correct"],
-                "eval/step": step,
             }
             
             # Add per-task metrics
             for task_name, task_results in results.get("per_task", {}).items():
                 log_dict[f"eval/{task_name}/accuracy"] = task_results["accuracy"]
-                # log_dict[f"eval/{task_name}/format_score"] = task_results["format_score"]
             
-            wandb.log(log_dict, commit=False)
-            self.logger.info(f"📊 Logged to wandb: accuracy={results['accuracy']:.1f}%")
+            # Use step parameter to force wandb to use train/global_step as x-axis
+            wandb.log(log_dict, step=step)
+            self.logger.info(f"📊 Logged to wandb: accuracy={results['accuracy']:.1f}% at global_step={step}")
         except Exception as e:
             self.logger.warning(f"Failed to log to wandb: {e}")
     

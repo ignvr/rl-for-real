@@ -55,15 +55,34 @@ class CustomGRPOTrainer(GRPOTrainer):
         self._step_count = 0
     
     def log(self, logs: dict, start_time: float = None) -> None:
-        """Override log to add batch counter for wandb x-axis support."""
-        # Add batch counter if batch_counts_as_step mode
-        if self.batch_counts_as_step and self.state is not None:
-            batch_count = self.state.global_step * self.args.gradient_accumulation_steps
-            logs["train/batch"] = batch_count
-            # Explicitly log to wandb since the callback may not pass through custom metrics
-            if WANDB_AVAILABLE and wandb.run is not None:
-                wandb.log({"train/batch": batch_count}, commit=False)
+        """Override log to manually log to wandb with correct x-axis."""
+        if self.state is not None and WANDB_AVAILABLE and wandb.run is not None:
+            # Determine which step metric to use
+            if self.batch_counts_as_step:
+                step_value = self.state.global_step * self.args.gradient_accumulation_steps
+            else:
+                step_value = self.state.global_step
+            
+            try:
+                wandb_logs = {}
+                
+                # Add all train metrics
+                for key, value in logs.items():
+                    if isinstance(value, (int, float)):
+                        # Prefix with train/ if not already prefixed
+                        if not key.startswith("train/") and not key.startswith("eval/"):
+                            wandb_logs[f"train/{key}"] = value
+                        else:
+                            wandb_logs[key] = value
+                
+                # Use step parameter to force wandb to use our step value as the x-axis
+                if wandb_logs:
+                    wandb.log(wandb_logs, step=step_value)
+            except Exception as e:
+                # Log error but don't crash training
+                print(f"Warning: Failed to log to wandb at step {step_value}: {e}")
         
+        # Still call parent to keep HuggingFace's internal logging
         super().log(logs, start_time)
 
     def _accuracy_reward(self, completions: list[str], **kwargs) -> list[float]:

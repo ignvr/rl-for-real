@@ -7,10 +7,9 @@ RL training on reasoning tasks using [reasoning-gym](https://github.com/open-tho
 ### 1. Create Environment
 
 ```bash
-# Create and activate venv
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
+# Create and activate conda environment with Python 3.10+
+conda create -n rl-for-real python=3.10 -y
+conda activate rl-for-real
 ```
 
 ### 2. Install PyTorch with CUDA
@@ -18,8 +17,7 @@ source venv/bin/activate  # Linux/Mac
 Install PyTorch **before** other dependencies. Use [pytorch.org/get-started](https://pytorch.org/get-started/locally/) to get the right command for your system. Example:
 
 ```bash
-# Example for CUDA 12.8 (check pytorch.org for current options)
-pip install torch --index-url https://download.pytorch.org/whl/cu128
+pip install torch --index-url https://download.pytorch.org/whl/cu124
 ```
 
 Verify (`Available` should be `True`):
@@ -49,20 +47,42 @@ wandb login
 # Run with default config
 python train_grpo.py --config config/grpo.yaml
 
-# Toy run with Qwen-1.5B
-python train_grpo.py --config config/qwen_1.5B_syllogism.yaml
+# Toy run on syllogism task
+python train_grpo.py --config config/syllogism_toy.yaml
 ```
 
-### Available Tasks
+## Exercise
 
-See [reasoning-gym datasets](https://github.com/open-thought/reasoning-gym/tree/main/reasoning_gym) for full list. Some examples:
+### Warmup
 
-| Category | Tasks |
-|----------|-------|
-| **Arithmetic** | `basic_arithmetic`, `chain_sum`, `complex_arithmetic` |
-| **Logic** | `syllogism`, `propositional_logic`, `knights_knaves` |
-| **Algorithmic** | `spell_backward`, `word_sorting`, `letter_counting` |
-| **Games** | `sudoku`, `countdown`, `game_of_24` |
+Run
+```bash
+python train_grpo.py --config config/syllogism_toy.yaml
+```
+This will train Llama-3.2-1B-Instruct for several minutes to solve the `syllogism` task.
+
+Observe the training and evaluation curves at wandb, as well as examples for questions and answers in the stdout logs. What changes in the model behavior?
+
+### Train Qwen for better reasoning
+
+You may run
+```bash
+python train_grpo.py --config config/multi_tasks.yaml
+```
+to train Qwen2.5-3B-Instruct to solve several reasoning tasks (`number_filtering`, `string_insertion`, `family_relationships`, `maze`) and test on the same tasks as well as the additional task of `base_conversion`.
+
+Using `config/multi_tasks.yaml` as provided should result in ~40min training.
+
+**Try to improve Qwen's training and achieve the best evaluation scores you can.**
+
+You may take whichever approach you like to improve the results.
+Below are several ideas.
+1. Consider hyper-parameters in `config/multi_tasks.yaml`, specifically under the section titles `Training steps`, `Batch sizes`, `Learning rate`, `GRPO-specific`, `Model behavior`, `LORA`. Can you tell what each hyper-parameter does? Which ones do you expect to have the largest effects on training?
+2. What is the GPU utilization under the current training? Which hyper-parameters can be used to increase it, if needed?
+3. The function `_format_reward()` in `trainer.py` defines the reward for answer format correctness, and is summed with `_accuracy_reward()`. Currently, each of the two functions returns a reward component of the same scale, in `[0,1]`. Is this the right balance? Consider the logic and scale of `_format_reward()` in light of the training curves.
+4. Extended coding:
+    * Try using TRL's KL-regularization. Notice that it restricts the model updates with respect to the *original* model weights ("global" regularization). Modify the regularization to be "local": every update, restrict the new model with respect to the *current* model, not the original one.
+    * TODO clipping idea - something with `get_off_policy_mask()?` [I can't find it](https://github.com/huggingface/trl/blob/main/trl/trainer/grpo_trainer.py#L1929).
 
 ## GPU Requirements
 
