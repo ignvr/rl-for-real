@@ -1,6 +1,6 @@
 # RL for Real
 
-RL training on reasoning tasks using [reasoning-gym](https://github.com/open-thought/reasoning-gym).
+RL training on reasoning tasks using [TRL](https://github.com/huggingface/trl) framework and [reasoning-gym](https://github.com/open-thought/reasoning-gym) benchmark.
 
 This repo was written by Ido Greenberg with advisement by Oran Lang and Gal Chechik for the course [RL-for-Real](https://docs.google.com/document/d/1fmfYp7EH9fqcB7CWWBvrZ40MtCN89Sr_o3o3EG9hWyE/edit?usp=sharing).
 The course is organized by NVIDIA Research in collaboration with Google Research, Mentee Robotics, Tel-Aviv University, Bar-Ilan University, and the Technion.
