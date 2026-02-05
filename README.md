@@ -34,24 +34,10 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.vers
 pip install -r requirements.txt
 ```
 
-### 4. Login to Services (Optional)
+### 4. Login to Wandb (Optional)
 
 ```bash
-# For model access (if using gated models)
-huggingface-cli login
-
-# For experiment tracking
 wandb login
-```
-
-### 5. Run Training
-
-```bash
-# Run with default config
-python train_grpo.py --config config/grpo.yaml
-
-# Toy run on syllogism task
-python train_grpo.py --config config/syllogism_toy.yaml
 ```
 
 ## Exercise
