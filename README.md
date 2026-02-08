@@ -7,6 +7,15 @@ The course is organized by NVIDIA Research in collaboration with Google Research
 
 ## Quick Start
 
+### 0. Install Miniconda (if needed)
+
+```bash
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh -b
+~/miniconda3/bin/conda init bash
+source ~/.bashrc
+```
+
 ### 1. Create Environment
 
 ```bash
