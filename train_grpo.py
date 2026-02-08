@@ -222,6 +222,7 @@ def _run_eval_only(reasoning_gym_args, training_args, model_args, logger):
         output_dir=training_args.output_dir,
         eval_steps=reasoning_gym_args.fixed_eval_steps,
         temperature=reasoning_gym_args.eval_temperature,
+        eval_batch_size=training_args.per_device_eval_batch_size,
     )
     
     # Initialize wandb
@@ -287,6 +288,7 @@ def _run_training(reasoning_gym_args, training_args, model_args, logger):
         output_dir=training_args.output_dir,
         eval_steps=reasoning_gym_args.fixed_eval_steps,
         temperature=reasoning_gym_args.eval_temperature,
+        eval_batch_size=training_args.per_device_eval_batch_size,
     )
     trainer.add_callback(eval_callback)
     logger.info(f"✓ Eval callback: {reasoning_gym_args.eval_num_samples} samples every {reasoning_gym_args.fixed_eval_steps} steps")

@@ -40,6 +40,7 @@ class FixedEvalCallback(TrainerCallback):
         output_dir: str = None,
         eval_steps: int = 50,
         temperature: float = 0.6,
+        eval_batch_size: int = 16,
     ):
         self.tokenizer = tokenizer
         self.num_samples = min(num_samples, len(eval_dataset))
@@ -50,6 +51,7 @@ class FixedEvalCallback(TrainerCallback):
         self.last_eval_step = -1
         self.temperature = temperature
         self.do_sample = temperature > 0
+        self.eval_batch_size = eval_batch_size
         
         # Store the underlying procedural dataset for proper scoring
         self.procedural_dataset = eval_dataset.data
@@ -110,70 +112,78 @@ class FixedEvalCallback(TrainerCallback):
         torch.cuda.empty_cache()
     
     def _evaluate(self, model, step: int) -> dict:
-        """Evaluate model on fixed samples."""
+        """Evaluate model on fixed samples using batched generation."""
         model.eval()
         device = next(model.parameters()).device
+        pad_token_id = self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
         
         num_correct = 0
         format_scores = []
         examples = []
-        
-        # Per-task tracking
         task_stats = {}  # task_name -> {"correct": int, "total": int, "format_scores": list}
         
-        for sample in self.fixed_samples:
-            task_name = sample["task"]
+        # Process samples in batches
+        for batch_start in range(0, len(self.fixed_samples), self.eval_batch_size):
+            batch_samples = self.fixed_samples[batch_start:batch_start + self.eval_batch_size]
+            batch_prompts = [s["prompt"] for s in batch_samples]
             
-            # Initialize task stats if needed
-            if task_name not in task_stats:
-                task_stats[task_name] = {"correct": 0, "total": 0, "format_scores": []}
-            
+            # Tokenize batch with left-padding for generation
+            original_padding_side = self.tokenizer.padding_side
+            self.tokenizer.padding_side = "left"
             inputs = self.tokenizer(
-                sample["prompt"],
+                batch_prompts,
                 return_tensors="pt",
                 truncation=True,
                 max_length=512,
+                padding=True,
             ).to(device)
+            self.tokenizer.padding_side = original_padding_side
             
+            # Generate for entire batch
             with torch.no_grad():
                 generate_kwargs = {
                     "max_new_tokens": self.max_new_tokens,
                     "do_sample": self.do_sample,
-                    "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+                    "pad_token_id": pad_token_id,
                 }
                 if self.do_sample:
                     generate_kwargs["temperature"] = self.temperature
                 outputs = model.generate(**inputs, **generate_kwargs)
             
-            generated_ids = outputs[0][inputs["input_ids"].shape[1]:]
-            generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
-            extracted = extract_answer(generated_text)
+            # Process each sample in the batch
+            input_length = inputs["input_ids"].shape[1]
+            for i, sample in enumerate(batch_samples):
+                task_name = sample["task"]
+                if task_name not in task_stats:
+                    task_stats[task_name] = {"correct": 0, "total": 0, "format_scores": []}
+                
+                generated_ids = outputs[i][input_length:]
+                generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+                extracted = extract_answer(generated_text)
 
-            # Use the proper score_answer() from the procedural dataset
-            # This handles semantic scoring (e.g., puzzle24 evaluates if expression=24)
-            score = self.procedural_dataset.score_answer(extracted, sample["item"])
-            is_correct = score >= 1.0
+                score = self.procedural_dataset.score_answer(extracted, sample["item"])
+                is_correct = score >= 1.0
 
-            if is_correct:
-                num_correct += 1
-                task_stats[task_name]["correct"] += 1
-            
-            task_stats[task_name]["total"] += 1
-            
-            format_score = self._score_format(generated_text)
-            format_scores.append(format_score)
-            task_stats[task_name]["format_scores"].append(format_score)
-            
-            examples.append({
-                "question": sample["question"],
-                "ground_truth": sample["answer"],
-                "generated": generated_text,
-                "extracted": extracted,
-                "correct": is_correct,
-                "accuracy_score": score,  # The actual score from score_answer()
-                "format_score": format_score,
-                "task": task_name,
-            })
+                if is_correct:
+                    num_correct += 1
+                    task_stats[task_name]["correct"] += 1
+                
+                task_stats[task_name]["total"] += 1
+                
+                format_score = self._score_format(generated_text)
+                format_scores.append(format_score)
+                task_stats[task_name]["format_scores"].append(format_score)
+                
+                examples.append({
+                    "question": sample["question"],
+                    "ground_truth": sample["answer"],
+                    "generated": generated_text,
+                    "extracted": extracted,
+                    "correct": is_correct,
+                    "accuracy_score": score,
+                    "format_score": format_score,
+                    "task": task_name,
+                })
         
         torch.cuda.empty_cache()
         model.train()
